@@ -52,6 +52,23 @@ CPU int8, 2 workers, renders capped at 720p, aspects 9:16 + 1:1.
 Environment: Python 3.14.7, Linux x86_64, ffmpeg 9.0.1, faster-whisper `base`, CPU int8, 2 workers.
 Raw output of that run is in `demo_output_full/manifest.json`.
 
+### Speech run (captions produced)
+
+The main run above has 0 ASR segments because both reels are music-led and the two 8 s clips are
+MMAudio foley outputs. To show the caption path on real speech, the pipeline was run on two
+AI-generated talking clips (a RunwayML lip-sync output and a SadTalker output, both June 2025):
+
+| Metric | Value |
+|---|---|
+| Assets processed / failed | 2 / 0 |
+| Wall clock | 9.84 s |
+| ASR segments | 1 per clip (non-empty SRT) |
+| Transcription | 6.09 s and 6.47 s |
+
+Sample SRT line: `Laura Ipsom is simply dummy text of the printing.` The spoken text is "Lorem Ipsum is
+simply dummy text of the printing", so the `base` model mishears the Latin words. Raw output is in
+`demo_output_speech/manifest.json` and the per-asset `.srt` files.
+
 ## Design decisions
 
 - **Audio path avoids PyAV.** faster-whisper's built-in decoder goes through PyAV, which fails on some
@@ -66,9 +83,10 @@ Raw output of that run is in `demo_output_full/manifest.json`.
 
 ## Limitations (what is not finished)
 
-- **Captions need speech.** The two reels in the demo run are music-led, so VAD returned 0 segments and the
-  caption files are empty. That is correct behaviour, not a failed step: with dialogue (the lip-sync sample)
-  the same path produces segments and a filled SRT.
+- **Captions need speech.** The two reels in the main run are music-led, so VAD returned 0 segments and the
+  caption files are empty. The speech run above shows the same path producing filled SRT files.
+- **Accuracy is model-limited.** `base` on CPU mishears uncommon words (see the sample line above); no
+  word-error-rate benchmark has been run yet.
 - **No burn-in captions, no translation, no speaker labels** yet. Output is sidecar SRT only.
 - **Scene candidates are timestamps only.** There is no ranking or automatic B-roll selection yet.
 - **CPU only.** No CUDA path and no batching across assets; throughput is one asset at a time per worker.
