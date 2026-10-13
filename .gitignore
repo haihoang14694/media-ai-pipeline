@@ -2,4 +2,6 @@ __pycache__/
 *.pyc
 .venv/
 demo_output/
+demo_output_full/**/*.mp4
+demo_output_full/*/*.mp4
 models/
