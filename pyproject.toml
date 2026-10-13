@@ -1,0 +1,16 @@
+[project]
+name = "media-ai-pipeline"
+version = "0.1.0"
+description = "Batch AI pipeline for short-form video: transcribe, caption, reframe to 9:16 / 1:1 / 16:9, thumbnails, scene candidates, per-asset cost and timing manifest."
+requires-python = ">=3.10"
+dependencies = ["faster-whisper>=1.0.0"]
+
+[project.scripts]
+media-ai-pipeline = "media_pipeline.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["media_pipeline"]
