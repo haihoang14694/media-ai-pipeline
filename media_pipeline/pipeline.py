@@ -60,6 +60,10 @@ class AssetResult:
     errors: list[str] = field(default_factory=list)
     local_cost_usd: float = 0.0
 
+    @property
+    def total_s(self) -> float:
+        return self.probe_s + self.asr_s + self.renders_s + self.thumbs_s + self.scenes_s
+
     def as_dict(self) -> dict:
         return {
             "asset": self.name,
@@ -74,7 +78,7 @@ class AssetResult:
                 "thumbnails": round(self.thumbs_s, 2),
                 "scene_scan": round(self.scenes_s, 2),
             },
-            "total_s": round(self.probe_s + self.asr_s + self.renders_s + self.thumbs_s + self.scenes_s, 2),
+            "total_s": round(self.total_s, 2),
             "asr_segments": self.asr_segments,
             "scene_candidates": self.scene_candidates,
             "outputs": self.outputs,
@@ -125,13 +129,44 @@ def write_srt(segments: list[dict], out_path: Path) -> None:
     out_path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def transcribe(path: Path, model_size: str = "tiny", language: str | None = None) -> tuple[list[dict], float, str]:
-    """Return (segments, elapsed_seconds, detected_language). Requires faster-whisper."""
-    from faster_whisper import WhisperModel  # imported lazily so the rest of the tool works without ASR deps
+def decode_audio(path: Path, sample_rate: int = 16000):
+    """Decode any input to mono float32 PCM at `sample_rate` using ffmpeg.
 
+    Done this way on purpose: faster-whisper's built-in decoder goes through PyAV, which
+    breaks on some PyAV builds (`metadata_errors`). ffmpeg is already a hard dependency of
+    this pipeline, so decoding through it removes a fragile link and keeps one audio path.
+    """
+    import numpy as np
+
+    # binary-safe decode: text=True would corrupt the PCM stream
+    proc = subprocess.run([
+        ffmpeg(), "-v", "error", "-i", str(path),
+        "-vn", "-f", "s16le", "-ac", "1", "-ar", str(sample_rate), "-",
+    ], capture_output=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"audio decode failed: {proc.stderr[-200:]!r}")
+    pcm = np.frombuffer(proc.stdout, dtype="<i2").astype("float32") / 32768.0
+    return pcm
+
+
+_ASR_CACHE: dict[str, object] = {}
+
+
+def _load_model(model_size: str, device: str = "cpu", compute_type: str = "int8"):
+    from faster_whisper import WhisperModel
+
+    key = f"{model_size}:{device}:{compute_type}"
+    if key not in _ASR_CACHE:
+        _ASR_CACHE[key] = WhisperModel(model_size, device=device, compute_type=compute_type)
+    return _ASR_CACHE[key]
+
+
+def transcribe(path: Path, model_size: str = "tiny", language: str | None = None) -> tuple[list[dict], float, str]:
+    """Return (segments, elapsed_seconds, detected_language). Requires faster-whisper + numpy."""
     t0 = time.time()
-    model = WhisperModel(model_size, device="cpu", compute_type="int8")
-    seg_iter, info = model.transcribe(str(path), language=language, vad_filter=True)
+    model = _load_model(model_size)
+    audio = decode_audio(path)
+    seg_iter, info = model.transcribe(audio, language=language, vad_filter=True)
     segments = [
         {"start": float(s.start), "end": float(s.end), "text": s.text}
         for s in seg_iter

@@ -9,4 +9,4 @@ OUT="${2:-$HERE/demo_output}"
 export PATH="/home/local-sever/.hermes/tools/uv-0.12.3-linux-x64:$PATH"
 unset PYTHONPATH
 cd "$HERE"
-uv run --no-project --with faster-whisper -- python -m media_pipeline run --input "$INPUT" --out "$OUT" --aspects 9:16,1:1 --model tiny --workers 2 --height-cap 720
+uv run --no-project --with faster-whisper --with numpy -- python -m media_pipeline run --input "$INPUT" --out "$OUT" --aspects 9:16,1:1 --model base --workers 2 --height-cap 720
